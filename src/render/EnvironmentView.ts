@@ -1,27 +1,18 @@
 import * as THREE from "three";
 import { LANE_WIDTH } from "../core/config";
 import { Random } from "../core/math";
-import { emissive, MATERIALS, paint } from "./materials";
+import { additive, emissive, lambert, phong } from "./materials";
 import { mergeByMaterial, worldScaleBoxUVs } from "./merge";
-import { graffitiDecal, signTexture } from "./pbrTextures";
+import { buildingTexture, glowTexture, graffitiWallTexture, gravelTexture, sleeperTexture } from "./textures";
 
 export const CHUNK_LENGTH = 30;
 const CHUNKS_AHEAD = 9;
+const MAX_CHUNKS_BEHIND = 7;
+const SLEEPER_SPACING = 1.1;
+const TRACK_HALF_WIDTH = LANE_WIDTH * 1.5 + 1.2;
+const WALL_X = TRACK_HALF_WIDTH + 0.6;
 const TUNNEL_PERIOD = 44;
 const TUNNEL_LENGTH = 4;
-/** The menu view shows the most scenery behind the runner. */
-const MAX_CHUNKS_BEHIND = 7;
-
-/** Real-world track dimensions (metres). */
-const GAUGE = 1.435;
-const SLEEPER_SPACING = 0.65;
-const RAIL_HEIGHT = 0.16;
-const BALLAST_HALF_WIDTH = LANE_WIDTH * 1.5 + 1.1;
-const WALL_X = 6.5;
-const WALL_HEIGHT = 3.1;
-const GROUND_Y = -0.3;
-const STREET_X = WALL_X + 0.45;
-const BUILDING_X = 10.5;
 
 export type ChunkTheme = "city" | "overpass" | "tunnel" | "tunnelEntry";
 
@@ -40,134 +31,40 @@ interface Chunk {
   index: number;
 }
 
-const graffitiMaterials = new Map<number, THREE.MeshStandardMaterial>();
-const graffitiMaterial = (variant: number): THREE.MeshStandardMaterial => {
-  let material = graffitiMaterials.get(variant);
-  if (!material) {
-    material = new THREE.MeshStandardMaterial({
-      map: graffitiDecal(variant),
-      transparent: true,
-      roughness: 0.8,
-      depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-    });
-    graffitiMaterials.set(variant, material);
-  }
-  return material;
-};
-
-const signMaterials = new Map<string, THREE.MeshStandardMaterial>();
-const signMaterial = (key: string, text: string, color: string, background: string, glow = 0): THREE.MeshStandardMaterial => {
-  let material = signMaterials.get(key);
-  if (!material) {
-    const map = signTexture(key, text, color, background);
-    material = new THREE.MeshStandardMaterial({ map, roughness: 0.5, ...(glow > 0 ? { emissive: "#ffffff", emissiveMap: map, emissiveIntensity: glow } : {}) });
-    signMaterials.set(key, material);
-  }
-  return material;
-};
-
-/** Small helper that places primitives into a group (merged per material afterwards). */
-class Kit {
-  readonly group = new THREE.Group();
-
-  box(w: number, h: number, d: number, material: THREE.Material, x: number, y: number, z: number, uvScale?: [number, number]): THREE.Mesh {
-    const geometry = uvScale ? worldScaleBoxUVs(new THREE.BoxGeometry(w, h, d), uvScale[0], uvScale[1]) : new THREE.BoxGeometry(w, h, d);
-    return this.add(geometry, material, x, y, z);
-  }
-
-  cylinder(
-    rTop: number,
-    rBottom: number,
-    h: number,
-    material: THREE.Material,
-    x: number,
-    y: number,
-    z: number,
-    segments = 10,
-    rotation?: THREE.Euler,
-  ): THREE.Mesh {
-    return this.add(new THREE.CylinderGeometry(rTop, rBottom, h, segments), material, x, y, z, rotation);
-  }
-
-  /** Thin straight member between two points (wires, braces, stairs). */
-  beam(from: THREE.Vector3, to: THREE.Vector3, radius: number, material: THREE.Material, segments = 5): THREE.Mesh {
-    const length = from.distanceTo(to);
-    const geometry = new THREE.CylinderGeometry(radius, radius, length, segments);
-    geometry.translate(0, length / 2, 0);
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.copy(from);
-    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.clone().sub(from).normalize());
-    this.group.add(mesh);
-    return mesh;
-  }
-
-  add(geometry: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number, rotation?: THREE.Euler): THREE.Mesh {
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y, z);
-    if (rotation) mesh.rotation.copy(rotation);
-    this.group.add(mesh);
-    return mesh;
-  }
-}
-
-/** Flat-bottom rail cross-section (UIC-60-like proportions) extruded along −z. */
-let railGeometryCache: THREE.BufferGeometry | null = null;
-const railGeometry = (): THREE.BufferGeometry => {
-  if (railGeometryCache) return railGeometryCache;
-  const shape = new THREE.Shape();
-  const foot = 0.075;
-  const web = 0.009;
-  const head = 0.036;
-  shape.moveTo(-foot, 0);
-  shape.lineTo(foot, 0);
-  shape.lineTo(foot, 0.012);
-  shape.lineTo(web, 0.035);
-  shape.lineTo(web, 0.11);
-  shape.lineTo(head, 0.118);
-  shape.lineTo(head, RAIL_HEIGHT - 0.006);
-  shape.quadraticCurveTo(head, RAIL_HEIGHT, head - 0.008, RAIL_HEIGHT);
-  shape.lineTo(-head + 0.008, RAIL_HEIGHT);
-  shape.quadraticCurveTo(-head, RAIL_HEIGHT, -head, RAIL_HEIGHT - 0.006);
-  shape.lineTo(-head, 0.118);
-  shape.lineTo(-web, 0.11);
-  shape.lineTo(-web, 0.035);
-  shape.lineTo(-foot, 0.012);
-  shape.closePath();
-  railGeometryCache = new THREE.ExtrudeGeometry(shape, { depth: CHUNK_LENGTH, bevelEnabled: false, curveSegments: 3 });
-  railGeometryCache.translate(0, 0, -CHUNK_LENGTH);
-  return railGeometryCache;
-};
+const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d);
 
 /**
- * Streams realistic railway scenery around the track: ballast bed, concrete
- * sleepers, profiled rails, retaining walls with graffiti, overhead catenary,
- * street lighting, brick and glass buildings, overpasses and tunnels. Chunks
- * are pooled per theme and repositioned as the runner advances.
+ * Streams the scenery around the track: gravel bed, three rail tracks,
+ * graffiti walls, buildings, bridges and tunnels. Chunks are merged per
+ * material, prebuilt at boot, pooled per theme and repositioned as the runner
+ * advances, so scenery costs a handful of draw calls and no allocation.
  */
 export class EnvironmentView {
   readonly root = new THREE.Group();
   private readonly active = new Map<number, Chunk>();
   private readonly pools = new Map<ChunkTheme, Chunk[]>();
-  private readonly skyline = new THREE.Group();
+  private readonly sleeperGeometry = box(LANE_WIDTH * 0.72, 0.12, 0.34);
+  private readonly railGeometry: THREE.BufferGeometry;
   private detail = 1;
   private tunnelFactor = 0;
+  /** The menu camera looks back down the line, so it needs scenery behind the runner. */
   private chunksBehind = 1;
 
   constructor() {
-    this.buildSkyline();
-    this.root.add(this.skyline);
+    const rail = box(0.1, 0.14, CHUNK_LENGTH);
+    rail.translate(0, 0.12, -CHUNK_LENGTH / 2);
+    this.railGeometry = rail;
   }
 
   setDetail(level: number): void {
     this.detail = level;
   }
 
-  /**
-   * Pre-builds the scenery pools so that the first tunnel or overpass never
-   * builds several chunks (and uploads their geometry) in the middle of a run.
-   */
+  setChunksBehind(count: number): void {
+    this.chunksBehind = count;
+  }
+
+  /** Pre-builds the scenery pools so no chunk is ever built mid-run. */
   prewarm(): void {
     const needed: Record<ChunkTheme, number> = {
       city: CHUNKS_AHEAD + MAX_CHUNKS_BEHIND + 2,
@@ -185,10 +82,6 @@ export class EnvironmentView {
         pool.push({ group, theme, index });
       }
     }
-  }
-
-  setChunksBehind(count: number): void {
-    this.chunksBehind = count;
   }
 
   /** 0 in open air, 1 deep inside a tunnel (used to dim lighting). */
@@ -218,7 +111,6 @@ export class EnvironmentView {
     const cameraChunk = Math.floor((playerZ - 6) / CHUNK_LENGTH);
     const target = themeForChunk(cameraChunk) === "tunnel" ? 1 : 0;
     this.tunnelFactor += (target - this.tunnelFactor) * 0.06;
-    this.skyline.visible = this.tunnelFactor < 0.95;
   }
 
   reset(): void {
@@ -253,331 +145,224 @@ export class EnvironmentView {
 
   private build(theme: ChunkTheme, index: number): THREE.Group {
     const rng = new Random(index * 7919 + 17);
-    const kit = new Kit();
-    this.buildTrackBed(kit);
+    const group = new THREE.Group();
+    group.add(this.buildTrackBed());
     switch (theme) {
       case "tunnel":
-        this.buildTunnel(kit, rng);
+        this.addTunnel(group);
         break;
       case "tunnelEntry":
-        this.buildTrackside(kit, rng, false);
-        this.buildTunnelPortal(kit);
+        this.addCitySides(group, rng, false);
+        this.addTunnelMouth(group);
         break;
       case "overpass":
-        this.buildTrackside(kit, rng, true);
-        this.buildOverpass(kit, rng);
+        this.addCitySides(group, rng, true);
+        this.addOverpass(group, rng);
         break;
       default:
-        this.buildTrackside(kit, rng, true);
+        this.addCitySides(group, rng, true);
     }
-    const merged = mergeByMaterial(kit.group);
-    merged.add(this.buildSleepers());
-    return merged;
+    return mergeByMaterial(group);
   }
 
-  // ─── Track ───────────────────────────────────────────────────────────────
+  private buildTrackBed(): THREE.Group {
+    const bed = new THREE.Group();
+    const groundGeometry = new THREE.PlaneGeometry(TRACK_HALF_WIDTH * 2 + 2, CHUNK_LENGTH);
+    const groundUV = groundGeometry.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < groundUV.count; i++) groundUV.setXY(i, groundUV.getX(i) * 4, groundUV.getY(i) * (CHUNK_LENGTH / 8));
+    const ground = new THREE.Mesh(groundGeometry, lambert("#ffffff", gravelTexture(), "ground"));
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(0, 0, -CHUNK_LENGTH / 2);
+    bed.add(ground);
 
-  private buildTrackBed(kit: Kit): void {
-    // Ballast bed: flat top with sloping shoulders down to the cess walkways.
-    const shape = new THREE.Shape();
-    shape.moveTo(-BALLAST_HALF_WIDTH - 0.8, GROUND_Y);
-    shape.lineTo(-BALLAST_HALF_WIDTH, -0.1);
-    shape.lineTo(BALLAST_HALF_WIDTH, -0.1);
-    shape.lineTo(BALLAST_HALF_WIDTH + 0.8, GROUND_Y);
-    shape.closePath();
-    const bed = new THREE.ExtrudeGeometry(shape, { depth: CHUNK_LENGTH, bevelEnabled: false });
-    bed.translate(0, 0, -CHUNK_LENGTH);
-    const uv = bed.attributes.uv as THREE.BufferAttribute;
-    const position = bed.attributes.position as THREE.BufferAttribute;
-    // World-scale UVs: one texture tile per 2 m across the top.
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, position.getX(i) / 2, position.getZ(i) / 2);
-    kit.add(bed, MATERIALS.ballast(), 0, 0, 0);
-
-    const cess = MATERIALS.concrete(3, [12, 1], false);
-    for (const side of [-1, 1]) {
-      kit.box(
-        WALL_X - BALLAST_HALF_WIDTH - 0.6,
-        0.12,
-        CHUNK_LENGTH,
-        cess,
-        side * ((WALL_X + BALLAST_HALF_WIDTH + 0.8) / 2),
-        GROUND_Y + 0.02,
-        -CHUNK_LENGTH / 2,
-      );
-      // Covered cable trough along the foot of the wall.
-      kit.box(0.5, 0.28, CHUNK_LENGTH, MATERIALS.concrete(1, [15, 0.2], false), side * (WALL_X - 0.35), GROUND_Y + 0.14, -CHUNK_LENGTH / 2);
-    }
-
-    const rail = railGeometry();
-    for (let lane = -1; lane <= 1; lane++) {
-      for (const side of [-GAUGE / 2, GAUGE / 2]) {
-        kit.add(rail, MATERIALS.railBody(), lane * LANE_WIDTH + side, 0, 0);
-        // Polished running surface where the wheels contact the rail.
-        kit.box(0.05, 0.004, CHUNK_LENGTH, MATERIALS.railHead(), lane * LANE_WIDTH + side, RAIL_HEIGHT + 0.001, -CHUNK_LENGTH / 2);
-      }
-    }
-  }
-
-  private buildSleepers(): THREE.Group {
-    const group = new THREE.Group();
     const perLane = Math.floor(CHUNK_LENGTH / SLEEPER_SPACING);
-    const sleepers = new THREE.InstancedMesh(new THREE.BoxGeometry(2.5, 0.2, 0.26), MATERIALS.sleeper(), perLane * 3);
-    const clips = this.detail > 0 ? new THREE.InstancedMesh(new THREE.BoxGeometry(0.2, 0.05, 0.1), MATERIALS.darkMetal(), perLane * 6) : null;
+    const sleepers = new THREE.InstancedMesh(this.sleeperGeometry, lambert("#ffffff", sleeperTexture(), "sleeper"), perLane * 3);
     const matrix = new THREE.Matrix4();
     let n = 0;
-    let c = 0;
     for (let lane = -1; lane <= 1; lane++) {
       for (let i = 0; i < perLane; i++) {
-        const z = -i * SLEEPER_SPACING - SLEEPER_SPACING / 2;
-        matrix.makeTranslation(lane * LANE_WIDTH, -0.1, z);
+        matrix.makeTranslation(lane * LANE_WIDTH, 0.04, -i * SLEEPER_SPACING - 0.4);
         sleepers.setMatrixAt(n++, matrix);
-        if (!clips) continue;
-        for (const side of [-GAUGE / 2, GAUGE / 2]) {
-          matrix.makeTranslation(lane * LANE_WIDTH + side, 0.025, z);
-          clips.setMatrixAt(c++, matrix);
-        }
       }
     }
-    for (const mesh of [sleepers, clips]) {
-      if (!mesh) continue;
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.frustumCulled = false;
-      mesh.receiveShadow = true;
-      group.add(mesh);
-    }
-    return group;
-  }
+    sleepers.instanceMatrix.needsUpdate = true;
+    sleepers.frustumCulled = false;
+    bed.add(sleepers);
 
-  // ─── Trackside ───────────────────────────────────────────────────────────
-
-  private buildTrackside(kit: Kit, rng: Random, withBuildings: boolean): void {
-    const wall = MATERIALS.concrete(rng.int(0, 2), [CHUNK_LENGTH / 6, 1]);
-    const coping = MATERIALS.concrete(3, [CHUNK_LENGTH / 3, 0.2], false);
-    for (const side of [-1, 1]) {
-      kit.box(0.45, WALL_HEIGHT - GROUND_Y, CHUNK_LENGTH, wall, side * WALL_X, (WALL_HEIGHT + GROUND_Y) / 2, -CHUNK_LENGTH / 2);
-      kit.box(0.7, 0.16, CHUNK_LENGTH, coping, side * WALL_X, WALL_HEIGHT + 0.08, -CHUNK_LENGTH / 2);
-      if (rng.chance(0.55)) {
-        const decal = new THREE.Mesh(new THREE.PlaneGeometry(7, 2.6), graffitiMaterial(rng.int(0, 9)));
-        decal.position.set(side * (WALL_X - 0.235), 1.35, -rng.range(5, CHUNK_LENGTH - 5));
-        decal.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
-        kit.group.add(decal);
-      }
-      // Street level beyond the wall: pavement slab.
-      const pavementWidth = BUILDING_X - STREET_X + 20;
-      kit.box(
-        pavementWidth,
-        0.2,
-        CHUNK_LENGTH,
-        MATERIALS.concrete(2, [6, CHUNK_LENGTH / 4], false),
-        side * (STREET_X + pavementWidth / 2),
-        WALL_HEIGHT - 0.1,
-        -CHUNK_LENGTH / 2,
-      );
-      this.buildLampPosts(kit, side, rng);
-      if (withBuildings) this.buildBuildings(kit, side, rng);
-      if (this.detail > 0) this.buildStreetTrees(kit, side, rng);
-    }
-    this.buildCatenary(kit, -CHUNK_LENGTH / 2);
-    if (rng.chance(0.3)) this.buildSignal(kit, rng.pick([-1, 1]), -rng.range(4, 12), rng);
-  }
-
-  private buildLampPosts(kit: Kit, side: number, rng: Random): void {
-    const pole = MATERIALS.galvanised();
-    for (let z = -rng.range(3, 8); z > -CHUNK_LENGTH; z -= 15) {
-      const x = side * (WALL_X - 0.55);
-      kit.cylinder(0.07, 0.1, 6, pole, x, GROUND_Y + 3, z, 8);
-      kit.beam(new THREE.Vector3(x, 5.9, z), new THREE.Vector3(x - side * 1.4, 6.05, z), 0.04, pole);
-      kit.box(0.55, 0.1, 0.22, MATERIALS.darkMetal(), x - side * 1.55, 6.0, z);
-      kit.box(0.46, 0.02, 0.16, emissive("#ffe7c2", 1), x - side * 1.55, 5.94, z);
-    }
-  }
-
-  /** Overhead line equipment: masts, cantilevers, messenger and contact wires with droppers. */
-  private buildCatenary(kit: Kit, z: number): void {
-    const steel = MATERIALS.galvanised();
-    const wire = MATERIALS.steel("#4a4d50", 0.5);
-    for (const side of [-1, 1]) {
-      const x = side * (WALL_X - 0.9);
-      // H-section mast: web plus two flanges.
-      kit.box(0.08, 7.4, 0.26, steel, x, GROUND_Y + 3.7, z);
-      kit.box(0.24, 7.4, 0.03, steel, x, GROUND_Y + 3.7, z + 0.12);
-      kit.box(0.24, 7.4, 0.03, steel, x, GROUND_Y + 3.7, z - 0.12);
-      kit.beam(new THREE.Vector3(x, 6.7, z), new THREE.Vector3(side * 1.2, 6.7, z), 0.045, steel);
-      kit.beam(new THREE.Vector3(x, 5.9, z), new THREE.Vector3(side * 2.8, 6.65, z), 0.035, steel);
-      kit.cylinder(0.06, 0.06, 0.35, paint("#7a4b3a", 0.6), x - side * 0.3, 6.7, z, 8, new THREE.Euler(0, 0, Math.PI / 2));
-    }
-    kit.beam(new THREE.Vector3(-1.2, 6.7, z), new THREE.Vector3(1.2, 6.7, z), 0.045, steel);
+    const railMaterial = phong("#c8ccd2", 90);
     for (let lane = -1; lane <= 1; lane++) {
-      const x = lane * LANE_WIDTH;
-      kit.beam(new THREE.Vector3(x, 5.55, 0), new THREE.Vector3(x, 5.55, -CHUNK_LENGTH), 0.012, wire, 4);
-      // Messenger wire sagging between supports, with droppers holding the contact wire.
-      const segments = 6;
-      const sag = (zz: number) => 6.55 - 0.45 * (1 - ((zz - z) / (CHUNK_LENGTH / 2)) ** 2);
-      for (let i = 0; i < segments; i++) {
-        const z0 = -(i / segments) * CHUNK_LENGTH;
-        const z1 = -((i + 1) / segments) * CHUNK_LENGTH;
-        kit.beam(new THREE.Vector3(x, sag(z0), z0), new THREE.Vector3(x, sag(z1), z1), 0.01, wire, 4);
-        if (this.detail > 0) kit.beam(new THREE.Vector3(x, 5.56, z1), new THREE.Vector3(x, sag(z1), z1), 0.005, wire, 3);
-      }
-      kit.beam(new THREE.Vector3(x, 5.55, z), new THREE.Vector3(x, 6.7, z), 0.012, steel, 4);
-    }
-  }
-
-  private buildSignal(kit: Kit, side: number, z: number, rng: Random): void {
-    const x = side * (WALL_X - 1.3);
-    kit.cylinder(0.08, 0.08, 3.6, MATERIALS.galvanised(), x, GROUND_Y + 1.8, z, 8);
-    kit.box(0.42, 1.0, 0.28, paint("#161718", 0.6), x, GROUND_Y + 3.6, z);
-    const aspect = rng.chance(0.7) ? "#39ff6a" : "#ff3b30";
-    kit.cylinder(0.09, 0.09, 0.04, emissive(aspect, 0.8), x, GROUND_Y + 3.85, z + 0.15, 12, new THREE.Euler(Math.PI / 2, 0, 0));
-    kit.cylinder(0.09, 0.09, 0.04, paint("#2a2a2a", 0.3), x, GROUND_Y + 3.45, z + 0.15, 12, new THREE.Euler(Math.PI / 2, 0, 0));
-  }
-
-  private buildStreetTrees(kit: Kit, side: number, rng: Random): void {
-    for (let z = -rng.range(4, 10); z > -CHUNK_LENGTH + 2; z -= rng.range(10, 16)) {
-      const x = side * rng.range(STREET_X + 1.2, BUILDING_X - 1);
-      const height = rng.range(4.5, 7);
-      kit.cylinder(0.12, 0.2, height, MATERIALS.bark(), x, WALL_HEIGHT + height / 2, z, 7);
-      const foliage = MATERIALS.foliage(rng.pick(["#3f5a2a", "#4a6a31", "#35502a", "#56733a"]));
-      for (let i = 0; i < 5; i++) {
-        const radius = rng.range(1.1, 1.8);
-        const geometry = new THREE.IcosahedronGeometry(radius, 1);
-        const position = geometry.attributes.position as THREE.BufferAttribute;
-        // Lumpy, irregular canopy clumps.
-        for (let v = 0; v < position.count; v++) {
-          const scale = 1 + (rng.next() - 0.5) * 0.35;
-          position.setXYZ(v, position.getX(v) * scale, position.getY(v) * scale * 0.85, position.getZ(v) * scale);
-        }
-        geometry.computeVertexNormals();
-        kit.add(geometry, foliage, x + rng.range(-1, 1), WALL_HEIGHT + height + rng.range(-0.5, 1.2), z + rng.range(-1, 1));
+      for (const side of [-0.55, 0.55]) {
+        const rail = new THREE.Mesh(this.railGeometry, railMaterial);
+        rail.position.x = lane * LANE_WIDTH + side;
+        bed.add(rail);
       }
     }
+    // Darker gravel strips between tracks give the lanes definition from a distance.
+    for (const x of [-LANE_WIDTH / 2, LANE_WIDTH / 2]) {
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(0.35, CHUNK_LENGTH), lambert("#6e5a45"));
+      strip.rotation.x = -Math.PI / 2;
+      strip.position.set(x, 0.01, -CHUNK_LENGTH / 2);
+      bed.add(strip);
+    }
+    return bed;
   }
 
-  private buildBuildings(kit: Kit, side: number, rng: Random): void {
-    let z = -rng.range(0, 3);
-    while (z > -CHUNK_LENGTH + 5) {
-      const width = rng.range(8, 14);
-      const depth = rng.range(10, 18);
-      const glass = rng.chance(0.22);
-      const floors = glass ? rng.int(10, 20) : rng.int(4, 9);
-      const height = floors * 3.2;
-      const x = side * (BUILDING_X + depth / 2 + rng.range(0, 3));
-      const baseY = WALL_HEIGHT;
-      const faceX = x - side * (depth / 2);
-      const zCenter = z - width / 2;
-      if (glass) {
-        kit.box(depth, height, width, MATERIALS.curtainWall(rng.int(0, 2), [1, 1]), x, baseY + height / 2, zCenter, [3.2, 6.4]);
-        kit.box(depth + 0.3, 0.6, width + 0.3, MATERIALS.concrete(3, [4, 0.3], false), x, baseY + height + 0.3, zCenter);
-      } else {
-        kit.box(depth, height, width, MATERIALS.facade(rng.int(0, 3), [1, 1]), x, baseY + height / 2, zCenter, [10, 19.2]);
-        // Parapet, cornice and a glazed ground-floor shopfront.
-        kit.box(depth + 0.25, 0.9, width + 0.25, MATERIALS.concrete(1, [4, 0.3], false), x, baseY + height + 0.45, zCenter);
-        kit.box(0.2, 0.35, width + 0.2, MATERIALS.concrete(3, [4, 0.3], false), faceX - side * 0.1, baseY + height - 0.2, zCenter);
-        kit.box(0.1, 3, width * 0.9, MATERIALS.glass(), faceX - side * 0.05, baseY + 1.6, zCenter);
-        if (this.detail > 0 && rng.chance(0.6)) this.buildFireEscape(kit, faceX, side, baseY, floors, zCenter);
-        if (rng.chance(0.55)) this.buildWaterTank(kit, x + rng.range(-2, 2), baseY + height + 0.9, zCenter + rng.range(-2, 2));
-        for (let i = 0; i < rng.int(1, 3); i++) {
-          kit.box(1.1, 0.8, 1.4, MATERIALS.galvanised(), x + rng.range(-3, 3), baseY + height + 1.3, z - rng.range(1, width - 1));
+  private addCitySides(group: THREE.Group, rng: Random, withBuildings: boolean): void {
+    for (const side of [-1, 1]) {
+      const wall = new THREE.Mesh(worldScaleBoxUVs(box(0.5, 2.6, CHUNK_LENGTH), 6, 2.6), lambert("#ffffff", graffitiWallTexture(rng.int(0, 3))));
+      wall.position.set(side * WALL_X, 1.3, -CHUNK_LENGTH / 2);
+      group.add(wall);
+      const cap = new THREE.Mesh(box(0.7, 0.18, CHUNK_LENGTH), lambert("#8d8d8d"));
+      cap.position.set(side * WALL_X, 2.65, -CHUNK_LENGTH / 2);
+      group.add(cap);
+
+      const verge = new THREE.Mesh(new THREE.PlaneGeometry(40, CHUNK_LENGTH), lambert("#7fb069"));
+      verge.rotation.x = -Math.PI / 2;
+      verge.position.set(side * (WALL_X + 20), -0.02, -CHUNK_LENGTH / 2);
+      group.add(verge);
+
+      if (withBuildings) this.addBuildings(group, side, rng);
+
+      for (let z = -rng.range(3, 8); z > -CHUNK_LENGTH; z -= 15) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 5.4, 6), lambert("#3d4450"));
+        pole.position.set(side * (WALL_X - 0.5), 2.7, z);
+        group.add(pole);
+        const arm = new THREE.Mesh(box(1.1, 0.1, 0.12), lambert("#3d4450"));
+        arm.position.set(side * (WALL_X - 1.0), 5.3, z);
+        group.add(arm);
+        const lamp = new THREE.Mesh(box(0.45, 0.14, 0.3), emissive("#fff3c4"));
+        lamp.position.set(side * (WALL_X - 1.5), 5.2, z);
+        group.add(lamp);
+      }
+
+      if (this.detail > 0 && rng.chance(0.6)) {
+        for (let i = 0; i < 2; i++) {
+          const x = side * (WALL_X + rng.range(1.5, 3.5));
+          const z = -rng.range(2, CHUNK_LENGTH - 2);
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 2, 6), lambert("#7a5230"));
+          trunk.position.set(x, 1, z);
+          group.add(trunk);
+          const shade = rng.pick(["#4caf50", "#66bb6a", "#2e7d32"]);
+          // Two stacked, slightly smoothed crowns read rounder than one faceted blob.
+          for (const [dy, radius] of [
+            [2.6, rng.range(1.2, 1.6)],
+            [3.5, rng.range(0.8, 1.1)],
+          ] as const) {
+            const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 1), lambert(shade));
+            crown.position.set(x, dy, z);
+            group.add(crown);
+          }
         }
       }
-      z -= width + rng.range(0.4, 2.5);
     }
-  }
 
-  private buildFireEscape(kit: Kit, faceX: number, side: number, baseY: number, floors: number, zCenter: number): void {
-    const iron = paint("#2b2c2e", 0.55, 0.6);
-    const outX = faceX - side * 0.7;
-    for (let f = 1; f < floors; f++) {
-      const y = baseY + f * 3.2;
-      kit.box(1.3, 0.05, 3.2, iron, outX, y, zCenter);
-      kit.box(0.04, 0.9, 3.2, iron, outX - side * 0.63, y + 0.45, zCenter);
-      const dir = f % 2 === 0 ? 1 : -1;
-      kit.beam(new THREE.Vector3(outX, y, zCenter + dir * 1.4), new THREE.Vector3(outX, y - 3.2, zCenter - dir * 1.4), 0.05, iron, 4);
-    }
-  }
-
-  private buildWaterTank(kit: Kit, x: number, y: number, z: number): void {
-    kit.cylinder(1.2, 1.2, 2.4, paint("#6d4b33", 0.85), x, y + 2, z, 14);
-    kit.cylinder(0.02, 1.35, 0.9, paint("#3a3a3a", 0.7), x, y + 3.65, z, 14);
-    for (const [dx, dz] of [
-      [-0.8, -0.8],
-      [0.8, -0.8],
-      [-0.8, 0.8],
-      [0.8, 0.8],
-    ] as const) {
-      kit.box(0.1, 1.2, 0.1, MATERIALS.darkMetal(), x + dx, y + 0.3, z + dz);
-    }
-  }
-
-  // ─── Structures ──────────────────────────────────────────────────────────
-
-  private buildOverpass(kit: Kit, rng: Random): void {
-    const z = -rng.range(9, CHUNK_LENGTH - 9);
-    const deckY = 8;
-    kit.box(64, 0.9, 9, MATERIALS.concrete(1, [1, 1], false), 0, deckY, z, [6, 1]);
-    for (const dz of [-3.2, -1.1, 1.1, 3.2]) kit.box(64, 0.9, 0.35, paint("#3d5a6e", 0.5, 0.5), 0, deckY - 0.85, z + dz);
-    for (const dz of [-4.4, 4.4]) kit.box(64, 1.1, 0.25, MATERIALS.concrete(3, [10, 0.3], false), 0, deckY + 1, z + dz);
+    // Overhead catenary gantry every chunk for rhythm and a sense of speed.
+    const gantryZ = -CHUNK_LENGTH / 2;
     for (const side of [-1, 1]) {
-      kit.box(1.2, deckY - GROUND_Y, 8, MATERIALS.concrete(0, [2, 2]), side * (WALL_X + 1.2), (deckY + GROUND_Y) / 2, z);
-      for (const dz of [-3.9, 3.9]) {
-        kit.cylinder(0.06, 0.08, 4.5, MATERIALS.galvanised(), side * 14, deckY + 2.7, z + dz, 8);
-        kit.box(0.5, 0.1, 0.2, emissive("#ffe7c2", 1), side * 13.6, deckY + 4.9, z + dz);
-      }
+      const post = new THREE.Mesh(box(0.25, 6.6, 0.25), lambert("#59606b"));
+      post.position.set(side * (TRACK_HALF_WIDTH - 0.2), 3.3, gantryZ);
+      group.add(post);
     }
-    kit.box(6, 1, 0.04, signMaterial("bridge", "MILL ST", "#f2f2f2", "#1f5a3a"), 0, deckY - 0.1, z + 4.53);
-  }
-
-  private buildTunnel(kit: Kit, rng: Random): void {
-    const lining = MATERIALS.concrete(3, [CHUNK_LENGTH / 6, 1.5]);
-    const height = 7.2;
-    for (const side of [-1, 1]) {
-      kit.box(0.6, height - GROUND_Y, CHUNK_LENGTH, lining, side * (WALL_X + 0.1), (height + GROUND_Y) / 2, -CHUNK_LENGTH / 2);
-      // Cable trays, a safety handrail and recessed emergency lights.
-      for (const y of [2.2, 2.5, 2.8]) kit.box(0.25, 0.06, CHUNK_LENGTH, MATERIALS.galvanised(), side * (WALL_X - 0.35), y, -CHUNK_LENGTH / 2);
-      kit.box(0.05, 0.05, CHUNK_LENGTH, paint("#d8b400", 0.5, 0.3), side * (WALL_X - 0.6), 1.1, -CHUNK_LENGTH / 2);
-      for (let z = -4; z > -CHUNK_LENGTH; z -= 8) kit.box(0.08, 0.32, 1.1, emissive("#fff1d0", 0.9), side * (WALL_X - 0.22), 4.2, z);
-      if (rng.chance(0.5)) kit.box(0.04, 0.3, 0.8, signMaterial("exit", "EXIT →", "#ffffff", "#0b7a36", 2.5), side * (WALL_X - 0.2), 3.1, -rng.range(5, 25));
-    }
-    kit.box(WALL_X * 2 + 1.4, 0.7, CHUNK_LENGTH, lining, 0, height + 0.35, -CHUNK_LENGTH / 2);
-    // Lining rings every 3 m give the tunnel its rhythm at speed.
-    for (let z = -1.5; z > -CHUNK_LENGTH; z -= 3) {
-      kit.box(WALL_X * 2, 0.25, 0.35, MATERIALS.concrete(1, [4, 0.2], false), 0, height - 0.1, z);
-      for (const side of [-1, 1]) {
-        kit.box(0.25, height - GROUND_Y, 0.35, MATERIALS.concrete(1, [0.3, 3], false), side * (WALL_X - 0.2), (height + GROUND_Y) / 2, z);
-      }
-    }
+    const beam = new THREE.Mesh(box(TRACK_HALF_WIDTH * 2, 0.25, 0.25), lambert("#59606b"));
+    beam.position.set(0, 6.5, gantryZ);
+    group.add(beam);
+    const wireMaterial = lambert("#2b2b2b");
     for (let lane = -1; lane <= 1; lane++) {
-      for (let z = -3; z > -CHUNK_LENGTH; z -= 6) kit.box(0.2, 0.06, 2.2, emissive("#e9f0ff", 0.8), lane * LANE_WIDTH, height - 0.26, z);
+      const wire = new THREE.Mesh(box(0.04, 0.04, CHUNK_LENGTH), wireMaterial);
+      wire.position.set(lane * LANE_WIDTH, 6.1, -CHUNK_LENGTH / 2);
+      group.add(wire);
     }
   }
 
-  private buildTunnelPortal(kit: Kit): void {
-    const z = -CHUNK_LENGTH + 0.6;
-    const face = MATERIALS.concrete(0, [6, 3]);
-    kit.box(40, 6, 1.6, face, 0, 10.2, z);
-    for (const side of [-1, 1]) kit.box(14, 13.5, 1.6, face, side * (WALL_X + 7.4), 6.5, z);
-    kit.box(WALL_X * 2 + 1.5, 0.5, 1.8, paint("#d8b400", 0.5, 0.2), 0, 7.45, z);
-    kit.box(4, 1, 0.06, signMaterial("tunnel", "TUNNEL 3", "#f2f2f2", "#23324a"), 0, 9.3, z + 0.84);
+  private addBuildings(group: THREE.Group, side: number, rng: Random): void {
+    let z = -rng.range(0, 4);
+    while (z > -CHUNK_LENGTH + 4) {
+      const width = rng.range(6, 11);
+      const height = rng.range(8, 22) * (this.detail > 0 ? 1 : 0.8);
+      const depth = rng.range(6, 10);
+      // One texture per facade style; UVs scale with the building so windows keep their size.
+      const building = new THREE.Mesh(worldScaleBoxUVs(box(depth, height, width), 5.5, 9), lambert("#ffffff", buildingTexture(rng.int(0, 6))));
+      building.position.set(side * (WALL_X + 4 + depth / 2 + rng.range(0, 6)), height / 2, z - width / 2);
+      group.add(building);
+      const roof = new THREE.Mesh(box(depth + 0.4, 0.5, width + 0.4), lambert("#5b5b66"));
+      roof.position.set(building.position.x, height + 0.25, building.position.z);
+      group.add(roof);
+      if (rng.chance(0.4)) {
+        const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 2, 10), lambert("#8b5e3c"));
+        tank.position.set(building.position.x, height + 1.5, building.position.z + rng.range(-1, 1));
+        group.add(tank);
+      }
+      if (this.detail > 0 && rng.chance(0.5)) {
+        // Coloured shop awning at street level.
+        const awning = new THREE.Mesh(box(1.2, 0.12, width * 0.7), lambert(rng.pick(["#e6392f", "#2f7de1", "#2bd46b", "#ff9f1c"])));
+        awning.position.set(building.position.x - side * (depth / 2 + 0.6), 3.2, building.position.z);
+        awning.rotation.z = side * 0.35;
+        group.add(awning);
+      }
+      z -= width + rng.range(0.5, 3);
+    }
   }
 
-  /**
-   * Hazy distant city blocks. Being effectively at infinity, they stay put
-   * relative to the camera instead of scrolling with the track.
-   */
-  private buildSkyline(): void {
-    const rng = new Random(4242);
-    const kit = new Kit();
-    for (let i = 0; i < 70; i++) {
-      const side = rng.chance(0.5) ? -1 : 1;
-      const width = rng.range(12, 35);
-      const height = rng.range(20, 110);
-      const material = rng.chance(0.5) ? MATERIALS.curtainWall(rng.int(0, 2), [1, 1]) : MATERIALS.facade(rng.int(0, 3), [1, 1]);
-      kit.box(width, height, width, material, side * rng.range(35, 260), height / 2 - 5, -rng.range(140, 480), [10, 19.2]);
+  private addOverpass(group: THREE.Group, rng: Random): void {
+    const z = -rng.range(8, CHUNK_LENGTH - 8);
+    const deck = new THREE.Mesh(box(TRACK_HALF_WIDTH * 2 + 14, 1.4, 5), lambert("#9aa3ad"));
+    deck.position.set(0, 8.2, z);
+    group.add(deck);
+    const railing = new THREE.Mesh(box(TRACK_HALF_WIDTH * 2 + 14, 0.8, 0.2), lambert("#d64545"));
+    railing.position.set(0, 9.3, z + 2.4);
+    group.add(railing);
+    for (const side of [-1, 1]) {
+      const pillar = new THREE.Mesh(box(1.4, 8, 3.6), lambert("#b0b7bf"));
+      pillar.position.set(side * (TRACK_HALF_WIDTH + 1.8), 4, z);
+      group.add(pillar);
     }
-    const merged = mergeByMaterial(kit.group);
-    merged.traverse((object) => {
-      if (object instanceof THREE.Mesh) object.castShadow = false;
-    });
-    this.skyline.add(merged);
+    const sign = new THREE.Mesh(worldScaleBoxUVs(box(6, 1.4, 0.2), 6, 2.6), lambert("#ffffff", graffitiWallTexture(rng.int(0, 3))));
+    sign.position.set(0, 8.2, z + 2.62);
+    group.add(sign);
+  }
+
+  private addTunnel(group: THREE.Group): void {
+    const wallMaterial = lambert("#6d6f78");
+    for (const side of [-1, 1]) {
+      const wall = new THREE.Mesh(box(0.8, 7, CHUNK_LENGTH), wallMaterial);
+      wall.position.set(side * (WALL_X + 0.2), 3.5, -CHUNK_LENGTH / 2);
+      group.add(wall);
+      for (let z = -3; z > -CHUNK_LENGTH; z -= 7.5) {
+        const light = new THREE.Mesh(box(0.1, 0.3, 1.6), emissive("#ffe9a8"));
+        light.position.set(side * (WALL_X - 0.25), 4.8, z);
+        group.add(light);
+        const halo = new THREE.Mesh(new THREE.PlaneGeometry(3, 2), additive("#ffcf6b", glowTexture(), 0.45));
+        halo.position.set(side * (WALL_X - 0.3), 4.8, z);
+        halo.rotation.y = (-side * Math.PI) / 2;
+        group.add(halo);
+      }
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, CHUNK_LENGTH, 8), lambert("#a3572d"));
+      pipe.rotation.x = Math.PI / 2;
+      pipe.position.set(side * (WALL_X - 0.3), 2.2, -CHUNK_LENGTH / 2);
+      group.add(pipe);
+    }
+    const ceiling = new THREE.Mesh(box(WALL_X * 2 + 1.5, 0.8, CHUNK_LENGTH), lambert("#55575f"));
+    ceiling.position.set(0, 7.2, -CHUNK_LENGTH / 2);
+    group.add(ceiling);
+    for (let z = -2; z > -CHUNK_LENGTH; z -= 6) {
+      const rib = new THREE.Mesh(box(WALL_X * 2 + 1.4, 0.5, 0.6), lambert("#474950"));
+      rib.position.set(0, 6.6, z);
+      group.add(rib);
+    }
+  }
+
+  private addTunnelMouth(group: THREE.Group): void {
+    const z = -CHUNK_LENGTH + 0.5;
+    const facade = new THREE.Mesh(box(WALL_X * 2 + 16, 6, 1.4), lambert("#8a8f99"));
+    facade.position.set(0, 10, z);
+    group.add(facade);
+    for (const side of [-1, 1]) {
+      const cheek = new THREE.Mesh(box(8, 13, 1.4), lambert("#8a8f99"));
+      cheek.position.set(side * (WALL_X + 4.6), 6.5, z);
+      group.add(cheek);
+    }
+    const stripe = new THREE.Mesh(box(WALL_X * 2 + 1, 0.6, 1.5), lambert("#ffd23f"));
+    stripe.position.set(0, 7.3, z);
+    group.add(stripe);
   }
 }

@@ -15,6 +15,8 @@ export default defineConfig({
   // MediaPipe ships its own wasm loader; pre-bundling it breaks its dynamic imports.
   optimizeDeps: { exclude: ["@mediapipe/tasks-vision"] },
   server: { host: true },
+  // The pose worker is a module worker (MediaPipe's runtime is loaded with import()).
+  worker: { format: "es" },
   test: {
     include: ["tests/**/*.test.ts"],
     environment: "node",

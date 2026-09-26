@@ -33,11 +33,15 @@ export class CameraPreview {
   private raf = 0;
   guide = false;
 
+  /**
+   * @param resolution - Backing canvas size; the small in-game PiP uses a quarter-size canvas to stay cheap.
+   */
   constructor(
     private readonly camera: CameraInput,
     className: string,
+    resolution: [number, number] = [640, 480],
   ) {
-    this.canvas = h("canvas", { width: 640, height: 480, "aria-label": "Camera preview (mirrored)", role: "img" });
+    this.canvas = h("canvas", { width: resolution[0], height: resolution[1], "aria-label": "Camera preview (mirrored)", role: "img" });
     const ctx = this.canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas 2D context unavailable for the camera preview");
     this.ctx = ctx;
@@ -120,7 +124,8 @@ export class CameraPreview {
     const color =
       !snapshot || snapshot.tracking === "lost" ? "#ffb81c" : snapshot.lateral !== "center" || snapshot.vertical !== "neutral" ? "#7cf6ff" : "#5ce65c";
     ctx.save();
-    ctx.lineWidth = 6;
+    const unit = canvas.width / 640;
+    ctx.lineWidth = 6 * unit;
     ctx.lineCap = "round";
     ctx.strokeStyle = color;
     ctx.shadowColor = "rgba(0,0,0,0.6)";
@@ -150,7 +155,7 @@ export class CameraPreview {
       if (!landmark || (landmark.visibility ?? 0) < 0.5) continue;
       const point = project(landmark);
       ctx.beginPath();
-      ctx.arc(point.x, point.y, 7, 0, Math.PI * 2);
+      ctx.arc(point.x, point.y, 7 * unit, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();

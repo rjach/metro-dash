@@ -3,7 +3,7 @@
 [![CI](https://github.com/rjach/metro-dash/actions/workflows/ci.yml/badge.svg)](https://github.com/rjach/metro-dash/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A browser endless runner in a realistic, cinematic city railway. Play it with the **keyboard**, **touch swipes**, or **your body through a webcam**: raise a hand to change lanes, jump to jump, crouch to slide. Pose tracking runs entirely on your device; no video ever leaves the browser.
+A bright, fast browser endless runner through a sunny city railway. Play it with the **keyboard**, **touch swipes**, or **your body through a webcam**: raise a hand to change lanes, jump to jump, crouch to slide. Pose tracking runs entirely on your device; no video ever leaves the browser.
 
 All characters, trains, buildings, textures, icons, music and sound effects are original and generated procedurally at runtime.
 
@@ -46,14 +46,10 @@ The keyboard always works as a backup in camera mode. Settings offer _Lean / ste
   - A guard and his dog who catch you after two stumbles.
   - Missions that raise a permanent score multiplier.
 - **Fair infinite track:** every generated segment is proven survivable by a reachability solver before it is placed.
-- **Realistic rendering:**
-  - Physically based materials with procedural normal and roughness maps, and a physical sky with image-based lighting.
-  - Soft sun shadows, ambient occlusion, bloom and a cinematic grade.
-  - A detailed railway: ballast, sleepers, rails, catenary, brick and glass buildings, overpasses and tunnels.
-- **Realistic runners:**
-  - Adult proportions with sculpted faces and clothing materials.
-  - Biomechanical run, jump and slide animation.
-  - Hoverboard stances with suspension physics, spring-driven hair and gear, and a physics crash fall.
+- **Stylised 3D:**
+  - Chunky cartoon runners and a curved-world city railway with graffiti walls, painted trains, tunnels, overpasses and clouds.
+  - Springy animation, including a surf stance and crouch on the hoverboard.
+- **Smooth everywhere:** dynamic resolution holds 60 fps, and camera tracking runs in a Web Worker so it never stutters the game.
 - **Soundtrack:** a procedural composer with song sections, chord progressions, fills, reverb and delay, and moods for the menu, the run and pause.
 - **Persistence:** records, coins, unlocks, upgrades, missions, settings and camera calibration survive refreshes.
 - **Responsive:** desktop, tablet and phone, in portrait and landscape.
@@ -62,7 +58,7 @@ The keyboard always works as a backup in camera mode. Settings offer _Lean / ste
 
 - [Architecture](docs/ARCHITECTURE.md): layers, simulation, procedural track, performance.
 - [Camera controls](docs/CAMERA_CONTROLS.md): gestures, pipeline, accuracy and failure handling.
-- [Rendering](docs/RENDERING.md): lighting, materials, post-processing, characters.
+- [Rendering](docs/RENDERING.md): look, characters, performance techniques.
 - [Testing](docs/TESTING.md): unit, soak and end-to-end suites, and the camera fixture.
 
 ## Privacy

@@ -1,6 +1,6 @@
 {
   "name": "metro-dash",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A browser endless runner with realistic 3D, playable with the keyboard or with hand and body gestures through your webcam (on-device pose tracking).",
   "license": "MIT",
   "type": "module",
@@ -38,6 +38,7 @@
     "e2e": "node e2e/run.mjs",
     "e2e:camera-video": "node e2e/make-performance.mjs",
     "tour": "node e2e/visual-tour.mjs",
+    "perf": "node e2e/perf-probe.mjs",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm test"
   },
   "dependencies": {

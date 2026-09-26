@@ -13,8 +13,16 @@ const MODELS = ["full", "lite"].map((variant) => ({
   url: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${variant}/float16/1/pose_landmarker_${variant}.task`,
 }));
 
-// Only the classic-script runtimes are loaded (SIMD, plus the no-SIMD fallback for older browsers).
-const WASM_FILES = ["vision_wasm_internal.js", "vision_wasm_internal.wasm", "vision_wasm_nosimd_internal.js", "vision_wasm_nosimd_internal.wasm"];
+// Classic runtimes (main-thread fallback, with a no-SIMD build for older browsers) plus the ES-module
+// runtime used by the pose Web Worker.
+const WASM_FILES = [
+  "vision_wasm_internal.js",
+  "vision_wasm_internal.wasm",
+  "vision_wasm_nosimd_internal.js",
+  "vision_wasm_nosimd_internal.wasm",
+  "vision_wasm_module_internal.js",
+  "vision_wasm_module_internal.wasm",
+];
 if (existsSync(wasmSrc)) {
   rmSync(wasmDest, { recursive: true, force: true });
   mkdirSync(wasmDest, { recursive: true });

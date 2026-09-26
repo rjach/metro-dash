@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { CollectibleKind } from "../game/types";
-import { additive, lambert, MATERIALS, phong, transparent } from "./materials";
-import { glowTexture, labelTexture, mysteryTexture } from "./textures";
+import { additive, lambert, phong, transparent } from "./materials";
+import { coinTexture, glowTexture, labelTexture, mysteryTexture } from "./textures";
 
 export const COIN_RADIUS = 0.42;
 
@@ -28,9 +28,8 @@ export const createCoinGeometry = (): THREE.CylinderGeometry => {
 };
 
 export const coinMaterials = (): THREE.Material[] => {
-  // Real gold: fully metallic, embossed face (normal-mapped "M"), milled rim.
-  const face = MATERIALS.gold();
-  const rim = MATERIALS.goldRim();
+  const face = phong("#ffffff", 80, coinTexture());
+  const rim = phong("#f5b800", 90);
   // Cylinder groups: side, top cap, bottom cap.
   return [rim, face, face];
 };

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { curved } from "./curve";
 import { glowTexture } from "./textures";
 
 interface Particle {
@@ -46,13 +47,14 @@ export class Particles {
   private readonly stretchQuat = new THREE.Quaternion();
 
   constructor() {
-    const material = new THREE.MeshBasicMaterial({
-      map: glowTexture(),
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      fog: false,
-    });
+    const material = curved(
+      new THREE.MeshBasicMaterial({
+        map: glowTexture(),
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
     this.mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), material, CAPACITY);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CAPACITY * 3), 3);
     this.mesh.frustumCulled = false;

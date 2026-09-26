@@ -85,7 +85,7 @@ export class HudScreen extends Screen {
     this.headstartButton.append(this.headstartCount);
     this.headstartButton.hidden = true;
 
-    this.pip = new CameraPreview(ui.camera, "cam-pip");
+    this.pip = new CameraPreview(ui.camera, "cam-pip", [320, 240]);
     this.pip.root.append(this.pipStatus, this.gestureFlash);
     this.pipWrap = this.pip.root;
     this.pipWrap.hidden = true;
