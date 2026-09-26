@@ -51,6 +51,7 @@ Oncoming trains are materialised lazily at a fixed lead distance so they meet th
 - Entities (`World`) and meshes (`WorldView`) are pooled. Obstacle meshes are cloned from per-look templates that share geometry and materials.
 - Scenery chunks are merged by material and prebuilt at boot. A warm-up render uploads every geometry and compiles every shader behind the loading screen.
 - All coins are drawn with one `InstancedMesh`; sleepers and rail clips are instanced per chunk.
-- MediaPipe is lazy-loaded only when camera mode is used.
+- MediaPipe is loaded only when camera mode is used, and runs in a Web Worker so inference never costs render time.
+- The renderer scales its resolution dynamically to hold 60 fps.
 
 The long-session e2e test asserts 60 fps and flat heap, geometry and texture counts over a 3-minute autopilot run.

@@ -7,7 +7,7 @@ import { GameSession } from "../game/GameSession";
 import type { TimedPowerUp } from "../game/types";
 import { CameraInput } from "../input/camera/CameraInput";
 import { CameraService } from "../input/camera/CameraService";
-import { MediaPipePoseEstimator } from "../input/camera/PoseEstimator";
+import { AdaptivePoseEstimator } from "../input/camera/PoseEstimator";
 import { InputManager, type UiCommand } from "../input/InputManager";
 import { KeyboardInput } from "../input/KeyboardInput";
 import { TouchInput } from "../input/TouchInput";
@@ -78,7 +78,7 @@ export class App implements UiController {
     this.session = new GameSession(buildLoadout(this.save.data));
     this.economy = new Economy(this.save, (ok) => this.sfx(ok ? "purchase" : "error"));
 
-    this.camera = new CameraInput(this.input.emit, new CameraService(), new MediaPipePoseEstimator(), this.save.data.calibration);
+    this.camera = new CameraInput(this.input.emit, new CameraService(), new AdaptivePoseEstimator(), this.save.data.calibration);
     this.camera.setSensitivity(settings.cameraSensitivity);
     this.input.register(new KeyboardInput(this.input.emit));
     this.input.register(new TouchInput(this.input.emit, root));

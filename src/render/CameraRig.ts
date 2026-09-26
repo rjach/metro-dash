@@ -135,8 +135,8 @@ export class CameraRig {
         // The details panel sits on the right in landscape and below in portrait; frame the runner in the free space.
         const portrait = this.camera.aspect < 1;
         return portrait
-          ? { desiredPosition: new THREE.Vector3(0, 1.25, -3.9), desiredLook: new THREE.Vector3(0, -0.55, 0) }
-          : { desiredPosition: new THREE.Vector3(-0.15, 1.3, -2.55), desiredLook: new THREE.Vector3(-0.72, 0.98, 0) };
+          ? { desiredPosition: new THREE.Vector3(0, 1.3, -5), desiredLook: new THREE.Vector3(0, -1.1, 0) }
+          : { desiredPosition: new THREE.Vector3(-0.2, 1.35, -3.6), desiredLook: new THREE.Vector3(-1.05, 1.0, 0) };
       }
       case "game": {
         // Keep the camera from bobbing with every jump; follow roofs and flight smoothly.

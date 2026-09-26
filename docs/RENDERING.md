@@ -1,48 +1,34 @@
 # Rendering
 
-The goal is a believable late-afternoon city railway, built entirely from procedural geometry and textures.
+Metro Dash uses a bright, stylised look: chunky cartoon runners, painted trains and a sunny city railway, all generated procedurally. Performance comes first: the game targets a locked 60 fps on laptop GPUs, including at retina resolutions and while camera tracking runs.
 
-## Lighting
+## Look
 
-- **Physical sky** (`three/examples/jsm/objects/Sky`) with a warm sun about 33° up on the left, slightly behind the runner. Wall shadows shade one lane, not all three.
-- **Image-based lighting**: the sky (without the sun disc) is baked into a PMREM environment map. Glass, chrome, painted steel and gold coins reflect the same sky.
-- **Sun shadows**: PCF-soft 2048² on High, with the frustum fitted just ahead of the runner.
-- **Exposure** is set for the physical sky's HDR range (ACES filmic). Tunnels dim the sun and environment and open up the exposure, like eye adaptation.
+- **Curved world:** every material is patched with a vertex bend (`curve.ts`), so the track drops away over the horizon and drifts gently sideways on long straights.
+- **Lighting:** a hemisphere sky/ground light plus a warm sun, soft blob shadows under characters, and distance fog that matches the sky. Tunnels dim the light and fog.
+- **Materials:** cel-shaded (four-band toon) characters; Lambert/Phong scenery; canvas-painted textures for graffiti walls, building facades, train liveries, gravel, sleepers and board decks.
+- **Backdrop:** a gradient sky with a painted cloud-and-skyline plane pinned to the horizon.
+- **Effects:** coin sparkles, pickup bursts, landing dust, board shatter and speed streaks, all in one instanced particle mesh.
 
-## Materials
+## Characters
 
-`materials.ts` exposes named physically based materials. `pbrTextures.ts` paints albedo, height and roughness canvases at runtime and derives normal maps from height with a Sobel filter. The library covers:
+`CharacterModel` builds each runner from a jointed rig: big head, hoodie, sneakers, and per-character hair and accessories. Procedural animation blends target poses for idle, run, jump, fall, roll, jetpack, stumble and crash. It adds:
 
-- ballast
-- concrete with formwork seams and rain streaks
-- brick facades whose windows are glossy in the roughness map and lit at random in the emissive map
-- curtain-wall glass
-- ribbed stainless steel
-- tread plate, rust, denim, fleece, hair, carbon fibre
-- embossed gold
+- a springy landing squash;
+- a surf stance on the hoverboard;
+- a crouch-and-grab when you go "down" while riding, so the board stays under your feet.
 
-## Post-processing (`PostFX`)
+The hoverboard rides on a damped spring above the track and banks into lane changes.
 
-| Quality | Pipeline                                                            |
-| ------- | ------------------------------------------------------------------- |
-| Low     | Direct render, tone mapping, no shadows                             |
-| Medium  | Bloom, grading, 2× MSAA, 1024² shadows                              |
-| High    | GTAO ambient occlusion, bloom, grading, 4× MSAA, 2048² soft shadows |
+## Performance
 
-Bloom's threshold is set in HDR units, so only real emitters glow: lamps, headlights, signals, LED signs and thrusters. The grade adds split toning, contrast, a vignette and fine grain.
+| Technique                                                  | Why                                                                                                                                                                  |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dynamic resolution (`ResolutionGovernor`)                  | Lowers the render scale when frames run slow and raises it when there's headroom. Graphics quality sets the ceiling (Low 0.75×, Medium 1×, High 1.5× device pixels). |
+| Scenery chunks merged per material and prebuilt at boot    | A 30 m chunk costs a handful of draw calls and never allocates mid-run.                                                                                              |
+| Pooled obstacle/pickup meshes cloned from shared templates | Geometry and materials are shared; no GPU uploads during play.                                                                                                       |
+| Instanced coins, sleepers and particles                    | One draw call each.                                                                                                                                                  |
+| Boot warm-up render                                        | Every shader compiles and every buffer uploads behind the loading screen.                                                                                            |
+| Pose detection in a Web Worker                             | Camera tracking never blocks a render frame (see [Camera controls](CAMERA_CONTROLS.md)).                                                                             |
 
-## Characters (`HumanModel`)
-
-- **Body:** adult proportions (~1.75 m, 7.5 heads). Limbs are lathe-turned from radius profiles, and joints are capped.
-- **Head and hands:** a skull sculpted from a displaced sphere; eyes with iris, pupil and blinking lids; fingers.
-- **Clothing:** physically based skin, fleece, denim and leather.
-- **Motion:**
-  - A phase-locked sprint cycle: hip, knee and ankle curves, pelvis bounce and twist, counter-rotating arms.
-  - An athletic jump with a sprung landing, and a baseball slide for "down".
-  - A surf stance on the hoverboard with a crouch-and-grab for "down".
-  - Jetpack flight, a stumble lurch, and a toppling-pendulum fall on crash.
-- **Secondary springs:** the ponytail, backpack, landing compression and lean.
-
-## Hoverboard physics
-
-The deck rides on a damped spring about 0.3 m above the ground: landings compress it, and it banks with lateral velocity and pitches with vertical motion. Thruster nacelles light the track with a point light in the board's colour.
+Measured at 1512×945 @2× (retina laptop): menu, keyboard runs and camera runs all hold 60 fps, with a worst frame of about 17 ms.

@@ -45,12 +45,7 @@ export const mergeByMaterial = (root: THREE.Object3D): THREE.Group => {
     geometries.forEach((geometry) => geometry.dispose());
     if (!combined) continue;
     combined.computeBoundingSphere();
-    const mesh = new THREE.Mesh(combined, material);
-    // Opaque scenery casts and receives sun shadows; glows and decals do neither.
-    const opaque = !material.transparent;
-    mesh.castShadow = opaque;
-    mesh.receiveShadow = opaque;
-    merged.add(mesh);
+    merged.add(new THREE.Mesh(combined, material));
   }
   for (const object of kept) merged.add(object);
   return merged;

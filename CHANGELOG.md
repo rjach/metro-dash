@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0
+
+- Back to the original stylised look (cartoon runners, bright city), now with a cloud skyline, eye highlights, landing squash, train roof details, shop awnings, fuller trees and kicked hoverboard decks.
+- Hoverboard "down" is now a crouch-and-grab on the board instead of rolling off it.
+- Performance: pose detection moved to a Web Worker, dynamic resolution scaling added, and the in-game camera preview draws at quarter size. Retina laptops now hold 60 fps in every mode (previously 30–45 fps with stalls), and memory use is about 3× lower.
+
 ## 1.0.0
 
 - Three-lane endless runner: trains (static and oncoming), ramps to train roofs, jump/slide barriers, buffer stops, coins, keys and five power-ups.

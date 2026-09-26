@@ -16,7 +16,7 @@ Settings → _Camera lane gesture_ switches lanes to **Lean / step** instead (bo
 ## Pipeline
 
 1. `CameraService` opens the webcam (`getUserMedia`) and maps failures to specific, user-facing errors: permission denied, no camera, camera busy, insecure context, unsupported browser, unplugged mid-run.
-2. `MediaPipePoseEstimator` loads the **full** Pose Landmarker model on the GPU, falling back to the lite model and the CPU. Inference is paced by `requestVideoFrameCallback` at ~30 Hz.
+2. Pose inference runs in a **Web Worker** (`pose.worker.ts`), so it never blocks rendering. Each video frame is downscaled into an `ImageBitmap` and transferred zero-copy to the worker, which runs the **full** Pose Landmarker model on the GPU through an `OffscreenCanvas` (falling back to the lite model and the CPU). Frames are paced by `requestVideoFrameCallback` at ~30 Hz, with at most one in flight, so slow devices skip frames instead of queueing. Browsers without Worker/OffscreenCanvas fall back to main-thread inference with the lite model (`AdaptivePoseEstimator`).
 3. `extractFeatures` converts 33 landmarks into mirrored body measurements: centre, shoulder height, spine tilt, torso length and per-hand height above the hips (in torso lengths). **Hands are assigned by which side of the body they are on, not by the model's labels.** Pose models regularly swap left/right wrist labels for a hand raised toward the camera.
 4. `Calibrator` guides framing (too far, too close, off-centre, hips hidden) and captures a still, neutral stance: centre, shoulder height, torso length and relaxed hand heights.
 5. `GestureRecognizer` runs one small state machine per gesture:

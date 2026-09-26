@@ -50,6 +50,7 @@ export class CameraInput implements InputSource {
   private sensitivity = 1;
   private laneGesture: LaneGesture = "hands";
   private runToken = 0;
+  private inferring = false;
 
   constructor(
     private readonly emit: Emit,
@@ -68,6 +69,11 @@ export class CameraInput implements InputSource {
 
   get enabled(): boolean {
     return this.running;
+  }
+
+  /** Which inference path is active (e.g. "worker · GPU · full"). */
+  get estimatorBackend(): string {
+    return this.estimator.backend;
   }
 
   get video(): HTMLVideoElement {
@@ -182,22 +188,29 @@ export class CameraInput implements InputSource {
   private processFrame(): void {
     if (!this.running) return;
     const now = performance.now();
-    if (now - this.lastInference >= MIN_INFERENCE_INTERVAL_MS && this.camera.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    // One inference in flight at a time: slow devices skip frames instead of building a backlog.
+    if (!this.inferring && now - this.lastInference >= MIN_INFERENCE_INTERVAL_MS && this.camera.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
       this.lastInference = now;
-      this.infer(now);
+      void this.infer(now);
     }
     this.scheduleFrame();
   }
 
-  private infer(now: number): void {
+  private async infer(now: number): Promise<void> {
+    const token = this.runToken;
+    this.inferring = true;
     let landmarks: Landmark[] | null;
     const started = performance.now();
     try {
-      landmarks = this.estimator.estimate(this.camera.video, now);
+      landmarks = await this.estimator.estimate(this.camera.video, now);
     } catch (error) {
-      this.fail(new CameraError("model-load-failed", `Pose detection crashed: ${String(error)}`, error));
+      this.inferring = false;
+      if (token === this.runToken) this.fail(new CameraError("model-load-failed", `Pose detection crashed: ${String(error)}`, error));
       return;
     }
+    this.inferring = false;
+    // The camera may have been switched off while the frame was being processed.
+    if (!this.running || token !== this.runToken) return;
     const inferenceMs = performance.now() - started;
     if (this.lastFrameAt > 0) this.fps = this.fps * 0.9 + (1000 / Math.max(1, now - this.lastFrameAt)) * 0.1;
     this.lastFrameAt = now;

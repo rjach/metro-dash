@@ -137,7 +137,7 @@ const setPose = (pose: PoseCommand) => {
   renderer.render(scene, camera);
 };
 
-const estimator = new MediaPipePoseEstimator();
+const estimator = new MediaPipePoseEstimator(["full"]);
 let t = 0;
 (window as unknown as Record<string, unknown>).harness = {
   ready: estimator.load().then(() => estimator.backend),
@@ -148,7 +148,7 @@ let t = 0;
   detect: (pose: PoseCommand) => {
     setPose(pose);
     t += 33;
-    const landmarks = estimator.estimate(canvas, t);
+    const landmarks = estimator.estimateSync(canvas, t);
     return landmarks ? landmarks.map((l) => ({ x: +l.x.toFixed(3), y: +l.y.toFixed(3), v: +(l.visibility ?? 0).toFixed(2) })) : null;
   },
 };
