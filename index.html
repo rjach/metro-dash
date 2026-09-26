@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#2a86ea" />
+    <meta name="description" content="Metro Dash: an endless subway runner you can play with your keyboard or your whole body through your webcam." />
+    <title>Metro Dash</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='11' fill='%23ffcc1f' stroke='%23d98c00' stroke-width='2'/%3E%3Cpath d='M7.5 16V8.5l4.5 4.5 4.5-4.5V16' fill='none' stroke='%23b36b00' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <main id="app" aria-label="Metro Dash game"></main>
+    <div class="loading" id="loading" role="status" aria-live="polite">
+      <div style="display: grid; justify-items: center; gap: 1em">
+        <div class="spinner"></div>
+        <div
+          style="
+            font:
+              900 1.1rem system-ui,
+              sans-serif;
+          "
+        >
+          Loading Metro Dash…
+        </div>
+      </div>
+    </div>
+    <noscript>Metro Dash needs JavaScript enabled.</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

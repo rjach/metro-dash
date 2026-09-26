@@ -1,0 +1,22 @@
+# Dependencies and build output
+node_modules
+dist
+
+# Downloaded at install time (npm run setup:assets): MediaPipe runtime and pose models
+public/mediapipe/wasm
+public/mediapipe/*.task
+
+# Test output
+e2e/artifacts
+.vitest
+coverage
+
+# Local scratch scripts
+e2e/zz-*.mjs
+
+# OS / editor
+.DS_Store
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea

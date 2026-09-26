@@ -1,0 +1,34 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: controls
+    attributes:
+      label: Control mode
+      options: [Keyboard, Touch, Camera]
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      placeholder: Chrome 131 on macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: camera
+    attributes:
+      label: Camera details (camera mode only)
+      description: Camera model, what the setup screen said, lane gesture setting. Please do not attach video of yourself.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or console output

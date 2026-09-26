@@ -1,0 +1,6 @@
+dist
+node_modules
+public
+e2e/artifacts
+.vitest
+package-lock.json
