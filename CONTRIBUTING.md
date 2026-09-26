@@ -51,9 +51,25 @@ npm run tour           # screenshots of every screen for visual review → e2e/a
 
 ## Commits and pull requests
 
-- Branch from `main`, keep PRs focused, and use a descriptive title (`feat: …`, `fix: …`, `perf: …`, `docs: …`, `test: …`, `chore: …`).
+- Fork (or branch, for maintainers) from `main`, keep PRs focused, and use a [Conventional Commits](https://www.conventionalcommits.org) title (`feat: …`, `fix: …`, `perf: …`, `docs: …`, `test: …`, `chore: …`). The PR title becomes the squash-commit message.
 - Fill in the PR template: what changed, why, and how you verified it. Add screenshots for visual changes.
-- `main` is protected: CI must pass and history stays linear (squash or rebase merges).
+
+## Repository rules
+
+`main` is protected by a repository ruleset:
+
+| Rule                  | Detail                                                                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pull request required | No direct pushes. One approving review from a code owner is required; new pushes dismiss earlier approvals, and every review thread must be resolved. |
+| Required checks       | `Lint, typecheck, test, build`, `Analyze (javascript-typescript)` (CodeQL) and `Dependency review` must pass on an up-to-date branch.                 |
+| History               | Squash merges only (linear history). Force-pushes and branch deletion are blocked.                                                                    |
+| Tags                  | Release tags (`v*`) can't be moved or deleted.                                                                                                        |
+
+Workflows from first-time contributors need a maintainer's approval before they run. Merged branches are deleted automatically.
+
+## Releases
+
+Maintainers tag `vX.Y.Z` on `main` and publish a GitHub release; notes are generated from PR labels (`.github/release.yml`). Update `CHANGELOG.md` and the `version` in `package.json` in the release PR.
 
 ## Reporting bugs
 
