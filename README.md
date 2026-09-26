@@ -1,7 +1,11 @@
 # Metro Dash
 
 [![CI](https://github.com/rjach/metro-dash/actions/workflows/ci.yml/badge.svg)](https://github.com/rjach/metro-dash/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/rjach/metro-dash/actions/workflows/codeql.yml/badge.svg)](https://github.com/rjach/metro-dash/actions/workflows/codeql.yml)
+[![Deploy demo](https://github.com/rjach/metro-dash/actions/workflows/pages.yml/badge.svg)](https://rjach.github.io/metro-dash/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**▶ Play it now: [rjach.github.io/metro-dash](https://rjach.github.io/metro-dash/)**
 
 A bright, fast browser endless runner through a sunny city railway. Play it with the **keyboard**, **touch swipes**, or **your body through a webcam**: raise a hand to change lanes, jump to jump, crouch to slide. Pose tracking runs entirely on your device; no video ever leaves the browser.
 
@@ -67,7 +71,7 @@ Camera frames are processed on-device and discarded. The pose runtime and models
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). `main` is protected: CI must pass and history stays linear.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md). All changes land through reviewed pull requests. `main` requires passing CI, CodeQL and dependency review, and keeps a linear, squash-merged history. Questions go to [Discussions](https://github.com/rjach/metro-dash/discussions); security reports go to [SECURITY.md](SECURITY.md).
 
 ## Browser support
 

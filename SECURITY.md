@@ -6,7 +6,14 @@ Only the latest release on `main` receives fixes.
 
 ## Reporting a vulnerability
 
-Please **do not open a public issue**. Report it privately through [GitHub Security Advisories](../../security/advisories/new) with steps to reproduce and the impact you expect. You should get an acknowledgement within a few days.
+Please **do not open a public issue**. Report it privately through [private vulnerability reporting](https://github.com/rjach/metro-dash/security/advisories/new) with steps to reproduce and the impact you expect. You should get an acknowledgement within a few days.
+
+## Automated safeguards
+
+- CodeQL code scanning on every pull request, and weekly.
+- Dependency review blocks PRs that add dependencies with known high-severity vulnerabilities or incompatible licenses.
+- Dependabot security and version updates.
+- Secret scanning with push protection.
 
 ## Privacy model
 
